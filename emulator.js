@@ -1,5 +1,6 @@
 let nostalgistModule
 let baseUrl = window.location.origin
+baseUrl += "/v01/emulator"
 function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 }
@@ -610,8 +611,10 @@ const Emulator = {
     container.appendChild(select)
     return container
   },
-  async fetchBinaryFile(url) {
-    url = encodeURIComponent(url)
+  async fetchBinaryFile(url, root) {
+    if (root != undefined) {
+        url = root + url
+    }
     url = `${url}`
     return fetch(url)
       .then(response => {
@@ -648,9 +651,10 @@ const Emulator = {
     this.currentRomName = href.split('/').pop()
     let biosFiles = []
     for (let biosName of guessedBios) {
-      let biosContent = await this.fetchBinaryFile(biosName)
+      let biosContent = await this.fetchBinaryFile(biosName, 'emulator/')
       biosFiles.push({ fileName: biosName, fileContent: biosContent })
     }
+    let romBlob = await this.fetchBinaryFile(href)
     let core = 'atari800'
     try {
       if (this.nostalgist != undefined) {
@@ -659,7 +663,10 @@ const Emulator = {
       this.nostalgist = await nostalgistModule.launch({
         core: core,
         bios: biosFiles,
-        rom: href,
+        rom: {
+            fileName: fileName,
+            fileContent: romBlob
+        },
         retroarchConfig: {
           input_pause_toggle: false,
           video_scale_integer: true,
