@@ -83,7 +83,7 @@ const Emulator = {
     })
   },
   shouldAddEmulator(link) {
-    const validExtensions = ['.xex', '.atr', '.cas', '.bin', '.car', '.xfd', '.atx', '.cdm']
+    const validExtensions = ['.xex', '.atr', '.cas', '.bin', '.car', '.xfd', '.atx', '.dcm', '.bas', '.obx']
     const validPlatforms = ['a8']
     const href = link.getAttribute('href')
     if (null == href) return false
