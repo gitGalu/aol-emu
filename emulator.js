@@ -62,6 +62,8 @@ const Emulator = {
     this.checkLinks()
     if (!isMobile()) {
       this.setupMenuAutoHide()
+    } else {
+      this.mobileCleanup = this.setupMobileOptimizations();
     }
   },
   async loadNostalgist() {
@@ -120,7 +122,7 @@ const Emulator = {
       this.createSettingsPopup(
         defaultConfig,
         link.href,
-        () => {},
+        () => { },
         (settings) => {
           this.emulate(link.getAttribute('href'), link.dataset.emulation, settings)
         }
@@ -618,7 +620,7 @@ const Emulator = {
   },
   async fetchBinaryFile(url, root) {
     if (root != undefined) {
-        url = root + url
+      url = root + url
     }
     url = `${url}`
     return fetch(url)
@@ -669,8 +671,8 @@ const Emulator = {
         core: core,
         bios: biosFiles,
         rom: {
-            fileName: fileName,
-            fileContent: romBlob
+          fileName: fileName,
+          fileContent: romBlob
         },
         retroarchConfig: {
           input_pause_toggle: false,
@@ -907,6 +909,280 @@ const Emulator = {
       })
     })
     observer.observe(document.body, { childList: true, subtree: true })
+  }
+  ,
+  setupMobileOptimizations() {
+    if (!isMobile()) return;
+
+    let emulatorActive = false;
+
+    function setupFullScreenOverlay() {
+      if (!emulatorActive) return;
+
+      const canvas = document.getElementById('canvas');
+      if (!canvas) return;
+
+      canvas.style.position = 'fixed';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
+      canvas.style.width = '100vw';
+      canvas.style.height = '100vh';
+      canvas.style.maxWidth = '100%';
+      canvas.style.maxHeight = '100%';
+      canvas.style.margin = '0';
+      canvas.style.padding = '0';
+      canvas.style.objectFit = 'contain';
+      canvas.style.backgroundColor = '#000';
+      canvas.style.zIndex = '9998';
+
+      if (emulatorActive) {
+        document.documentElement.style.margin = '0';
+        document.documentElement.style.padding = '0';
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        document.body.style.overflow = 'hidden';
+      }
+
+      let background = document.getElementById('emulator-mobile-background');
+      if (!background && emulatorActive) {
+        background = document.createElement('div');
+        background.id = 'emulator-mobile-background';
+        background.style.position = 'fixed';
+        background.style.top = '-10px';
+        background.style.left = '-10px';
+        background.style.width = 'calc(100vw + 20px)';
+        background.style.height = 'calc(100vh + 20px)';
+        background.style.backgroundColor = '#000';
+        background.style.zIndex = '9997';
+        document.body.appendChild(background);
+      }
+
+      const mobileMenu = document.getElementById('emulator-mobile-menu');
+      if (mobileMenu) {
+        mobileMenu.style.zIndex = '9999';
+      }
+    }
+
+    function disableTouchGestures() {
+      if (!emulatorActive) return;
+
+      const touchmoveHandler = function (event) {
+        const element = event.target;
+        if (element.id === 'canvas' ||
+          element.id === 'emulator-mobile-background' ||
+          element.closest('#emulator-mobile-menu')) {
+          event.preventDefault();
+        }
+      };
+
+      const touchstartHandler = function (event) {
+        if (event.touches.length > 1) {
+          event.preventDefault();
+        }
+      };
+
+      const touchendHandler = function (event) {
+        const now = Date.now();
+        const DOUBLE_TAP_THRESHOLD = 300;
+
+        if (typeof window.lastTouchEnd === 'number') {
+          if (now - window.lastTouchEnd < DOUBLE_TAP_THRESHOLD) {
+            event.preventDefault();
+          }
+        }
+
+        window.lastTouchEnd = now;
+      };
+
+      if (emulatorActive) {
+        document.addEventListener('touchmove', touchmoveHandler, { passive: false });
+        document.addEventListener('touchstart', touchstartHandler, { passive: false });
+        document.addEventListener('touchend', touchendHandler, { passive: false });
+
+        window.emulatorTouchHandlers = {
+          move: touchmoveHandler,
+          start: touchstartHandler,
+          end: touchendHandler
+        };
+      } else if (window.emulatorTouchHandlers) {
+        document.removeEventListener('touchmove', window.emulatorTouchHandlers.move);
+        document.removeEventListener('touchstart', window.emulatorTouchHandlers.start);
+        document.removeEventListener('touchend', window.emulatorTouchHandlers.end);
+        window.emulatorTouchHandlers = null;
+      }
+
+      let viewport = document.querySelector('meta[name="viewport"]');
+      if (!viewport) {
+        viewport = document.createElement('meta');
+        viewport.name = 'viewport';
+        document.head.appendChild(viewport);
+      }
+
+      if (!window.originalViewport) {
+        window.originalViewport = viewport.content;
+      }
+
+      if (emulatorActive) {
+        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+      } else {
+        if (window.originalViewport) {
+          viewport.content = window.originalViewport;
+        }
+      }
+
+      const styleId = 'emulator-mobile-styles';
+      let styleElement = document.getElementById(styleId);
+
+      if (emulatorActive && !styleElement) {
+        styleElement = document.createElement('style');
+        styleElement.id = styleId;
+        styleElement.textContent = `
+        #canvas, #emulator-mobile-background, #emulator-mobile-menu {
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          user-select: none;
+          touch-action: none;
+          overscroll-behavior: none;
+        }
+      `;
+        document.head.appendChild(styleElement);
+      } else if (!emulatorActive && styleElement) {
+        styleElement.remove();
+      }
+    }
+
+    function hideBrowserChrome() {
+      if (!emulatorActive) return;
+
+      function hideAddressBar() {
+        if (!emulatorActive) return;
+
+        if (document.documentElement.scrollHeight > window.innerHeight) {
+          setTimeout(function () {
+            window.scrollTo(0, 1);
+          }, 0);
+        } else {
+          const originalHeight = document.body.style.height;
+          document.body.style.height = (window.innerHeight + 50) + 'px';
+          setTimeout(function () {
+            window.scrollTo(0, 1);
+            if (emulatorActive) {
+              document.body.style.height = window.innerHeight + 'px';
+            } else {
+              document.body.style.height = originalHeight;
+            }
+          }, 0);
+        }
+      }
+
+      if (emulatorActive) {
+        hideAddressBar();
+      }
+
+      function requestFullScreen() {
+        if (!emulatorActive) return;
+
+        const canvas = document.getElementById('canvas');
+        if (!canvas) return;
+
+        if (document.fullscreenEnabled) {
+          canvas.requestFullscreen().catch(err => {
+            console.warn('Fullscreen request failed:', err);
+          });
+        } else if (document.webkitFullscreenEnabled) {
+          canvas.webkitRequestFullscreen().catch(err => {
+            console.warn('Webkit fullscreen request failed:', err);
+          });
+        }
+      }
+
+      if (emulatorActive) {
+        document.addEventListener('touchstart', requestFullScreen, { once: true });
+      }
+    }
+
+    function handleResize() {
+      if (!emulatorActive) return;
+
+      setupFullScreenOverlay();
+
+      setTimeout(function () {
+        if (emulatorActive) {
+          window.scrollTo(0, 1);
+        }
+      }, 100);
+    }
+
+    function activateOptimizations() {
+      emulatorActive = true;
+      setupFullScreenOverlay();
+      disableTouchGestures();
+      hideBrowserChrome();
+
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('orientationchange', handleResize);
+    }
+
+    function deactivateOptimizations() {
+      emulatorActive = false;
+
+      const background = document.getElementById('emulator-mobile-background');
+      if (background) {
+        background.remove();
+      }
+
+      const initialOverlay = document.getElementById('emulator-initial-overlay');
+      if (initialOverlay) {
+        initialOverlay.remove();
+      }
+
+      document.documentElement.style.overflow = '';
+      document.documentElement.style.margin = '';
+      document.documentElement.style.padding = '';
+      document.body.style.overflow = '';
+      document.body.style.margin = '';
+      document.body.style.padding = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+
+      disableTouchGestures();
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+
+      let viewport = document.querySelector('meta[name="viewport"]');
+      if (viewport && window.originalViewport) {
+        viewport.content = window.originalViewport;
+      }
+    }
+
+    const observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        mutation.addedNodes.forEach(function (node) {
+          if (node.id === 'canvas') {
+            activateOptimizations();
+          }
+        });
+
+        mutation.removedNodes.forEach(function (node) {
+          if (node.id === 'canvas') {
+            deactivateOptimizations();
+          }
+        });
+      });
+    });
+
+    observer.observe(document.body, { childList: true });
+
+    return {
+      activate: activateOptimizations,
+      deactivate: deactivateOptimizations,
+      cleanup: function () {
+        deactivateOptimizations();
+        observer.disconnect();
+      }
+    };
   }
 }
 export default Emulator
