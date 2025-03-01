@@ -83,16 +83,16 @@ const Emulator = {
     })
   },
   shouldAddEmulator(link) {
-    const validExtensions = ['.xex', '.atr', '.cas', '.bin', '.car']
+    const validExtensions = ['.xex', '.atr', '.cas', '.bin', '.car', '.xfd', '.atx', '.cdm']
     const validPlatforms = ['a8']
     const href = link.getAttribute('href')
     if (null == href) return false
-    if (validExtensions.some(ext => href.endsWith(ext))) return true
+    if (validExtensions.some(ext => href.toLowerCase().endsWith(ext.toLowerCase()))) return true
     const parentClass = link.parentElement?.className || '';
-    if (validExtensions.some(ext => parentClass.includes(ext.slice(1)))) {
-        return true;
+    if (validExtensions.some(ext => parentClass.toLowerCase().includes(ext.slice(1).toLowerCase()))) {
+      return true;
     }
-    return validPlatforms.includes(link.dataset.emulation)
+    return validPlatforms.includes(link.dataset.emulation?.toLowerCase())
   },
   addEmulator(link) {
     const label = document.createElement('span')
