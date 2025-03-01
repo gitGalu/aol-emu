@@ -86,7 +86,12 @@ const Emulator = {
     const validExtensions = ['.xex', '.atr', '.cas', '.bin', '.car']
     const validPlatforms = ['a8']
     const href = link.getAttribute('href')
+    if (null == href) return false
     if (validExtensions.some(ext => href.endsWith(ext))) return true
+    const parentClass = link.parentElement?.className || '';
+    if (validExtensions.some(ext => parentClass.includes(ext.slice(1)))) {
+        return true;
+    }
     return validPlatforms.includes(link.dataset.emulation)
   },
   addEmulator(link) {
@@ -651,7 +656,7 @@ const Emulator = {
     this.currentRomName = href.split('/').pop()
     let biosFiles = []
     for (let biosName of guessedBios) {
-      let biosContent = await this.fetchBinaryFile(biosName, 'emulator/')
+      let biosContent = await this.fetchBinaryFile(biosName, '/v01/emulator/')
       biosFiles.push({ fileName: biosName, fileContent: biosContent })
     }
     let romBlob = await this.fetchBinaryFile(href)
