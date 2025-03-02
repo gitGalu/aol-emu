@@ -1,3 +1,5 @@
+import { QuickShot, SingleTouchButton, SingleTouchButtonCallbackListener } from './mobile-touch-controls.js'
+
 let nostalgistModule
 let baseUrl = window.location.origin
 baseUrl += "/v01/emulator"
@@ -55,6 +57,7 @@ const Emulator = {
   menuTimeout: null,
   menuVisible: true,
   menuHideDelay: 3000,
+  quickShot: null,
   init() {
     this.applyStyles()
     this.observeNewElements()
@@ -63,7 +66,7 @@ const Emulator = {
     if (!isMobile()) {
       this.setupMenuAutoHide()
     } else {
-      this.mobileCleanup = this.setupMobileOptimizations();
+      this.mobileCleanup = this.setupMobileOptimizations()
     }
   },
   async loadNostalgist() {
@@ -90,9 +93,9 @@ const Emulator = {
     const href = link.getAttribute('href')
     if (null == href) return false
     if (validExtensions.some(ext => href.toLowerCase().endsWith(ext.toLowerCase()))) return true
-    const parentClass = link.parentElement?.className || '';
+    const parentClass = link.parentElement?.className || ''
     if (validExtensions.some(ext => parentClass.toLowerCase().includes(ext.slice(1).toLowerCase()))) {
-      return true;
+      return true
     }
     return validPlatforms.includes(link.dataset.emulation?.toLowerCase())
   },
@@ -267,7 +270,6 @@ const Emulator = {
       background: white;
       padding: 20px;
       border-radius: 8px;
-      padding: 8px;
       width: 90%;
       max-width: 400px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -277,13 +279,14 @@ const Emulator = {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
     `
-    const title = document.createElement('h2')
+    const title = document.createElement('p')
     title.textContent = 'Uruchom emulację'
     title.style.cssText = `
       margin: 0;
-      font-size: 1.5em;
+      font-size: 1em;
+      font-weight: bold;
     `
     const closeButton = document.createElement('button')
     closeButton.innerHTML = '&times;'
@@ -309,9 +312,9 @@ const Emulator = {
       popup.remove()
       onLaunch(settings)
     }
-    const createSelectGroup = (labelText, name, options, defaultValue) => {
+    const createSelectGroup = (labelText, name, options, defaultValue, inline = false) => {
       const group = document.createElement('div')
-      group.style.marginBottom = '15px'
+      group.style.cssText = inline ? 'flex: 1; margin-right: 5px;' : ''
       const label = document.createElement('label')
       label.textContent = labelText
       label.style.cssText = `
@@ -349,14 +352,31 @@ const Emulator = {
       ['400/800 (OS A)', 'Atari 400/800 48KB (OS A)'],
       ['400/800 (OS B)', 'Atari 400/800 48KB (OS B)']
     ], defaultConfig.atari800_system))
-    form.appendChild(createSelectGroup('BASIC', 'atari800_internalbasic', [
+
+    const rowContainer = document.createElement('div')
+    rowContainer.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    `
+    rowContainer.appendChild(createSelectGroup('BASIC', 'atari800_internalbasic', [
       ['disabled', 'Nie'],
       ['enabled', 'Tak']
-    ], defaultConfig.atari800_internalbasic))
-    form.appendChild(createSelectGroup('System TV', 'atari800_ntscpal', [
+    ], defaultConfig.atari800_internalbasic, true))
+    rowContainer.appendChild(createSelectGroup('System TV', 'atari800_ntscpal', [
       ['PAL', 'PAL'],
       ['NTSC', 'NTSC']
-    ], defaultConfig.atari800_ntscpal))
+    ], defaultConfig.atari800_ntscpal, true))
+    form.appendChild(rowContainer)
+
+    const guessedControls = this.guessControls();
+    form.appendChild(createSelectGroup('Sterowanie', 'mode', [
+      ['keyboard', 'Klawiatura'],
+      ['touch', 'Dotyk'],
+      ['gamepad', 'Gamepad']
+    ], guessedControls))
+
     if (fileUrl.toLowerCase().endsWith('.cas')) {
       form.appendChild(createSelectGroup('Autostart kasety', 'atari800_cassboot', [
         ['disabled', 'Wyłączony'],
@@ -368,7 +388,7 @@ const Emulator = {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-      margin-top: 20px;
+      margin-top: 5px;
     `
     const cancelButton = document.createElement('button')
     cancelButton.textContent = 'Anuluj'
@@ -399,6 +419,13 @@ const Emulator = {
     popup.appendChild(content)
     document.body.appendChild(popup)
     return popup
+  },
+  guessControls() {
+    if (isMobile()) {
+      return 'touch';
+    } else {
+      return 'keyboard';
+    }
   },
   async enableWebGLPiP(canvas) {
     if (!canvas.captureStream) {
@@ -652,6 +679,35 @@ const Emulator = {
     })
   },
   async emulate(href, data, settings) {
+    let controllerOverrrides = {}
+    let isTouchJoy = settings.mode == 'touch'
+
+    switch (settings.mode) {
+      case 'touch':
+        controllerOverrrides = {
+          input_player1_up: 'F13',
+          input_player1_left: 'F14',
+          input_player1_down: 'F15',
+          input_player1_right: 'F11',
+          input_player1_b: 'kp_minus'
+        }
+        break
+      case 'gamepad':
+        controllerOverrrides = {
+          input_player1_up: 'nul',
+          input_player1_left: 'nul',
+          input_player1_down: 'nul',
+          input_player1_right: 'nul',
+          input_player1_b: 'nul',
+          input_player1_a: 'nul',
+          input_player1_c: 'nul'
+        }
+        break
+      case 'keyboard':
+      default:
+        break
+    }
+
     let self = this
     const fileName = this.extractFileName(href)
     const guessedBios = this.guessBIOS(fileName)
@@ -678,7 +734,8 @@ const Emulator = {
           input_pause_toggle: false,
           video_scale_integer: true,
           force_scale: true,
-          video_smooth: false
+          video_smooth: false,
+          ...controllerOverrrides
         },
         retroarchCoreConfig: settings,
         resolveCoreJs(core) {
@@ -713,28 +770,111 @@ const Emulator = {
         mobileNav.style.top = '0'
         mobileNav.style.left = '0'
         mobileNav.style.display = 'flex'
+        mobileNav.style.justifyContent = 'space-between'
         mobileNav.style.alignItems = 'center'
         mobileNav.style.zIndex = '9999'
         mobileNav.style.fontFamily = "'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif"
-        let backBtn = document.createElement('div')
-        backBtn.style.cursor = 'pointer'
-        backBtn.style.marginLeft = '16px'
-        backBtn.innerHTML = '&lt; Wstecz'
-        backBtn.addEventListener('touchstart', () => {
-          if (self.nostalgist) {
-            self.nostalgist.exit()
+
+        const leftContainer = document.createElement('div')
+        leftContainer.style.marginLeft = '16px'
+
+        const backBtnListener = new SingleTouchButtonCallbackListener(() => {
+          if (this.quickShot) {
+            this.quickShot.hide()
+            this.quickShot = null
           }
-          document.getElementById("canvas")?.remove()
-          document.getElementById("emulator-mobile-menu")?.remove()
-          const emuButtons = document.querySelectorAll('span[data-pip-disabled="true"]')
-          emuButtons.forEach(button => {
-            button.style.pointerEvents = ''
-            button.style.opacity = ''
-            button.removeAttribute('data-pip-disabled')
+          if (this.nostalgist) {
+            this.nostalgist.exit()
+          }
+
+          document.getElementById('canvas')?.remove()
+          document.getElementById('emulator-mobile-menu')?.remove()
+          document.getElementById('mobile-maximize-container')?.remove()
+
+          const bg = document.getElementById('emulator-mobile-background')
+          if (bg) bg.remove()
+
+          document.body.style.overflow = ''
+          document.documentElement.style.overflow = ''
+          document.body.style.pointerEvents = 'auto'
+
+          const disabled = document.querySelectorAll('[data-pip-disabled="true"]')
+          disabled.forEach(btn => {
+            btn.style.pointerEvents = ''
+            btn.style.opacity = ''
+            btn.removeAttribute('data-pip-disabled')
           })
         })
-        mobileNav.appendChild(backBtn)
+
+        const backBtn = new SingleTouchButton(
+          leftContainer,
+          '◁ Wstecz',
+          null,
+          'mobile-back-button',
+          backBtnListener,
+          '8px'
+        )
+
+        backBtn.el.style.cursor = 'pointer'
+        backBtn.el.style.width = '80px'
+        backBtn.el.style.height = '28px'
+        backBtn.el.style.display = 'flex'
+        backBtn.el.style.alignItems = 'center'
+        backBtn.el.style.justifyContent = 'center'
+
+        const rightContainer = document.createElement('div')
+        rightContainer.style.display = 'flex'
+        rightContainer.style.flexDirection = 'row'
+        rightContainer.style.gap = '8px'
+        rightContainer.style.marginRight = '16px'
+        rightContainer.style.height = '48px'
+        rightContainer.style.alignItems = 'center'
+
+        const startBtnListener = new SingleTouchButtonCallbackListener(() => {
+          this.simulateKeypress('F4', 'F4', 115)
+        })
+
+        const startBtn = new SingleTouchButton(
+          rightContainer,
+          'START',
+          null,
+          'mobile-start-button',
+          startBtnListener,
+          '8px'
+        )
+
+        startBtn.el.style.cursor = 'pointer'
+        startBtn.el.style.width = '80px'
+        startBtn.el.style.height = '28px'
+        startBtn.el.style.display = 'flex'
+        startBtn.el.style.alignItems = 'center'
+        startBtn.el.style.justifyContent = 'center'
+
+        const selectBtnListener = new SingleTouchButtonCallbackListener(() => {
+          this.nostalgist.press('select')
+        })
+
+        const selectBtn = new SingleTouchButton(
+          rightContainer,
+          'SELECT',
+          null,
+          'mobile-select-button',
+          selectBtnListener,
+          '8px'
+        )
+
+        selectBtn.el.style.cursor = 'pointer'
+        selectBtn.el.style.width = '80px'
+        selectBtn.el.style.height = '28px'
+        selectBtn.el.style.display = 'flex'
+        selectBtn.el.style.alignItems = 'center'
+        selectBtn.el.style.justifyContent = 'center'
+
+        mobileNav.appendChild(leftContainer)
+        mobileNav.appendChild(rightContainer)
+
         document.body.appendChild(mobileNav)
+
       } else {
         mobileNav.style.display = 'flex'
       }
@@ -819,6 +959,10 @@ const Emulator = {
           menuEl.style.transform = 'translateY(0)'
         }
       }
+    }
+    if (isMobile() && this.nostalgist && isTouchJoy) {
+      this.quickShot = new QuickShot(this.nostalgist)
+      this.quickShot.show()
     }
   },
   applyStylesToElement(element, styles) {
@@ -912,131 +1056,131 @@ const Emulator = {
   }
   ,
   setupMobileOptimizations() {
-    if (!isMobile()) return;
+    if (!isMobile()) return
 
-    let emulatorActive = false;
+    let emulatorActive = false
 
     function setupFullScreenOverlay() {
-      if (!emulatorActive) return;
+      if (!emulatorActive) return
 
-      const canvas = document.getElementById('canvas');
-      if (!canvas) return;
+      const canvas = document.getElementById('canvas')
+      if (!canvas) return
 
-      canvas.style.position = 'fixed';
-      canvas.style.top = '0';
-      canvas.style.left = '0';
-      canvas.style.width = '100vw';
-      canvas.style.height = '100vh';
-      canvas.style.maxWidth = '100%';
-      canvas.style.maxHeight = '100%';
-      canvas.style.margin = '0';
-      canvas.style.padding = '0';
-      canvas.style.objectFit = 'contain';
-      canvas.style.backgroundColor = '#000';
-      canvas.style.zIndex = '9998';
+      canvas.style.position = 'fixed'
+      canvas.style.top = '0'
+      canvas.style.left = '0'
+      canvas.style.width = '100vw'
+      canvas.style.height = '100vh'
+      canvas.style.maxWidth = '100%'
+      canvas.style.maxHeight = '100%'
+      canvas.style.margin = '0'
+      canvas.style.padding = '0'
+      canvas.style.objectFit = 'contain'
+      canvas.style.backgroundColor = '#000'
+      canvas.style.zIndex = '9998'
 
       if (emulatorActive) {
-        document.documentElement.style.margin = '0';
-        document.documentElement.style.padding = '0';
-        document.documentElement.style.overflow = 'hidden';
-        document.body.style.margin = '0';
-        document.body.style.padding = '0';
-        document.body.style.overflow = 'hidden';
+        document.documentElement.style.margin = '0'
+        document.documentElement.style.padding = '0'
+        document.documentElement.style.overflow = 'hidden'
+        document.body.style.margin = '0'
+        document.body.style.padding = '0'
+        document.body.style.overflow = 'hidden'
       }
 
-      let background = document.getElementById('emulator-mobile-background');
+      let background = document.getElementById('emulator-mobile-background')
       if (!background && emulatorActive) {
-        background = document.createElement('div');
-        background.id = 'emulator-mobile-background';
-        background.style.position = 'fixed';
-        background.style.top = '-10px';
-        background.style.left = '-10px';
-        background.style.width = 'calc(100vw + 20px)';
-        background.style.height = 'calc(100vh + 20px)';
-        background.style.backgroundColor = '#000';
-        background.style.zIndex = '9997';
-        document.body.appendChild(background);
+        background = document.createElement('div')
+        background.id = 'emulator-mobile-background'
+        background.style.position = 'fixed'
+        background.style.top = '-10px'
+        background.style.left = '-10px'
+        background.style.width = 'calc(100vw + 20px)'
+        background.style.height = 'calc(100vh + 20px)'
+        background.style.backgroundColor = '#000'
+        background.style.zIndex = '9997'
+        document.body.appendChild(background)
       }
 
-      const mobileMenu = document.getElementById('emulator-mobile-menu');
+      const mobileMenu = document.getElementById('emulator-mobile-menu')
       if (mobileMenu) {
-        mobileMenu.style.zIndex = '9999';
+        mobileMenu.style.zIndex = '9999'
       }
     }
 
     function disableTouchGestures() {
-      if (!emulatorActive) return;
+      if (!emulatorActive) return
 
       const touchmoveHandler = function (event) {
-        const element = event.target;
+        const element = event.target
         if (element.id === 'canvas' ||
           element.id === 'emulator-mobile-background' ||
           element.closest('#emulator-mobile-menu')) {
-          event.preventDefault();
+          event.preventDefault()
         }
-      };
+      }
 
       const touchstartHandler = function (event) {
         if (event.touches.length > 1) {
-          event.preventDefault();
+          event.preventDefault()
         }
-      };
+      }
 
       const touchendHandler = function (event) {
-        const now = Date.now();
-        const DOUBLE_TAP_THRESHOLD = 300;
+        const now = Date.now()
+        const DOUBLE_TAP_THRESHOLD = 300
 
         if (typeof window.lastTouchEnd === 'number') {
           if (now - window.lastTouchEnd < DOUBLE_TAP_THRESHOLD) {
-            event.preventDefault();
+            event.preventDefault()
           }
         }
 
-        window.lastTouchEnd = now;
-      };
+        window.lastTouchEnd = now
+      }
 
       if (emulatorActive) {
-        document.addEventListener('touchmove', touchmoveHandler, { passive: false });
-        document.addEventListener('touchstart', touchstartHandler, { passive: false });
-        document.addEventListener('touchend', touchendHandler, { passive: false });
+        document.addEventListener('touchmove', touchmoveHandler, { passive: false })
+        document.addEventListener('touchstart', touchstartHandler, { passive: false })
+        document.addEventListener('touchend', touchendHandler, { passive: false })
 
         window.emulatorTouchHandlers = {
           move: touchmoveHandler,
           start: touchstartHandler,
           end: touchendHandler
-        };
+        }
       } else if (window.emulatorTouchHandlers) {
-        document.removeEventListener('touchmove', window.emulatorTouchHandlers.move);
-        document.removeEventListener('touchstart', window.emulatorTouchHandlers.start);
-        document.removeEventListener('touchend', window.emulatorTouchHandlers.end);
-        window.emulatorTouchHandlers = null;
+        document.removeEventListener('touchmove', window.emulatorTouchHandlers.move)
+        document.removeEventListener('touchstart', window.emulatorTouchHandlers.start)
+        document.removeEventListener('touchend', window.emulatorTouchHandlers.end)
+        window.emulatorTouchHandlers = null
       }
 
-      let viewport = document.querySelector('meta[name="viewport"]');
+      let viewport = document.querySelector('meta[name="viewport"]')
       if (!viewport) {
-        viewport = document.createElement('meta');
-        viewport.name = 'viewport';
-        document.head.appendChild(viewport);
+        viewport = document.createElement('meta')
+        viewport.name = 'viewport'
+        document.head.appendChild(viewport)
       }
 
       if (!window.originalViewport) {
-        window.originalViewport = viewport.content;
+        window.originalViewport = viewport.content
       }
 
       if (emulatorActive) {
-        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
       } else {
         if (window.originalViewport) {
-          viewport.content = window.originalViewport;
+          viewport.content = window.originalViewport
         }
       }
 
-      const styleId = 'emulator-mobile-styles';
-      let styleElement = document.getElementById(styleId);
+      const styleId = 'emulator-mobile-styles'
+      let styleElement = document.getElementById(styleId)
 
       if (emulatorActive && !styleElement) {
-        styleElement = document.createElement('style');
-        styleElement.id = styleId;
+        styleElement = document.createElement('style')
+        styleElement.id = styleId
         styleElement.textContent = `
         #canvas, #emulator-mobile-background, #emulator-mobile-menu {
           -webkit-touch-callout: none;
@@ -1045,115 +1189,116 @@ const Emulator = {
           touch-action: none;
           overscroll-behavior: none;
         }
-      `;
-        document.head.appendChild(styleElement);
+      `
+        document.head.appendChild(styleElement)
       } else if (!emulatorActive && styleElement) {
-        styleElement.remove();
+        styleElement.remove()
       }
     }
 
     function hideBrowserChrome() {
-      if (!emulatorActive) return;
+      if (!emulatorActive) return
 
       function hideAddressBar() {
-        if (!emulatorActive) return;
+        if (!emulatorActive) return
 
         if (document.documentElement.scrollHeight > window.innerHeight) {
           setTimeout(function () {
-            window.scrollTo(0, 1);
-          }, 0);
+            window.scrollTo(0, 1)
+          }, 0)
         } else {
-          const originalHeight = document.body.style.height;
-          document.body.style.height = (window.innerHeight + 50) + 'px';
+          const originalHeight = document.body.style.height
+          document.body.style.height = (window.innerHeight + 50) + 'px'
           setTimeout(function () {
-            window.scrollTo(0, 1);
+            window.scrollTo(0, 1)
             if (emulatorActive) {
-              document.body.style.height = window.innerHeight + 'px';
+              document.body.style.height = window.innerHeight + 'px'
             } else {
-              document.body.style.height = originalHeight;
+              document.body.style.height = originalHeight
             }
-          }, 0);
+          }, 0)
         }
       }
 
       if (emulatorActive) {
-        hideAddressBar();
+        hideAddressBar()
       }
 
       function requestFullScreen() {
-        if (!emulatorActive) return;
+        return //todo
+        if (!emulatorActive) return
 
-        const canvas = document.getElementById('canvas');
-        if (!canvas) return;
+        const canvas = document.getElementById('canvas')
+        if (!canvas) return
 
         if (document.fullscreenEnabled) {
           canvas.requestFullscreen().catch(err => {
-            console.warn('Fullscreen request failed:', err);
-          });
+            console.warn('Fullscreen request failed:', err)
+          })
         } else if (document.webkitFullscreenEnabled) {
           canvas.webkitRequestFullscreen().catch(err => {
-            console.warn('Webkit fullscreen request failed:', err);
-          });
+            console.warn('Webkit fullscreen request failed:', err)
+          })
         }
       }
 
       if (emulatorActive) {
-        document.addEventListener('touchstart', requestFullScreen, { once: true });
+        document.addEventListener('touchstart', requestFullScreen, { once: true })
       }
     }
 
     function handleResize() {
-      if (!emulatorActive) return;
+      if (!emulatorActive) return
 
-      setupFullScreenOverlay();
+      setupFullScreenOverlay()
 
       setTimeout(function () {
         if (emulatorActive) {
-          window.scrollTo(0, 1);
+          window.scrollTo(0, 1)
         }
-      }, 100);
+      }, 100)
     }
 
     function activateOptimizations() {
-      emulatorActive = true;
-      setupFullScreenOverlay();
-      disableTouchGestures();
-      hideBrowserChrome();
+      emulatorActive = true
+      setupFullScreenOverlay()
+      disableTouchGestures()
+      hideBrowserChrome()
 
-      window.addEventListener('resize', handleResize);
-      window.addEventListener('orientationchange', handleResize);
+      window.addEventListener('resize', handleResize)
+      window.addEventListener('orientationchange', handleResize)
     }
 
     function deactivateOptimizations() {
-      emulatorActive = false;
+      emulatorActive = false
 
-      const background = document.getElementById('emulator-mobile-background');
+      const background = document.getElementById('emulator-mobile-background')
       if (background) {
-        background.remove();
+        background.remove()
       }
 
-      const initialOverlay = document.getElementById('emulator-initial-overlay');
+      const initialOverlay = document.getElementById('emulator-initial-overlay')
       if (initialOverlay) {
-        initialOverlay.remove();
+        initialOverlay.remove()
       }
 
-      document.documentElement.style.overflow = '';
-      document.documentElement.style.margin = '';
-      document.documentElement.style.padding = '';
-      document.body.style.overflow = '';
-      document.body.style.margin = '';
-      document.body.style.padding = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
-      document.body.style.height = '';
+      document.documentElement.style.overflow = ''
+      document.documentElement.style.margin = ''
+      document.documentElement.style.padding = ''
+      document.body.style.overflow = ''
+      document.body.style.margin = ''
+      document.body.style.padding = ''
+      document.body.style.position = ''
+      document.body.style.width = ''
+      document.body.style.height = ''
 
-      disableTouchGestures();
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
+      disableTouchGestures()
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('orientationchange', handleResize)
 
-      let viewport = document.querySelector('meta[name="viewport"]');
+      let viewport = document.querySelector('meta[name="viewport"]')
       if (viewport && window.originalViewport) {
-        viewport.content = window.originalViewport;
+        viewport.content = window.originalViewport
       }
     }
 
@@ -1161,28 +1306,28 @@ const Emulator = {
       mutations.forEach(function (mutation) {
         mutation.addedNodes.forEach(function (node) {
           if (node.id === 'canvas') {
-            activateOptimizations();
+            activateOptimizations()
           }
-        });
+        })
 
         mutation.removedNodes.forEach(function (node) {
           if (node.id === 'canvas') {
-            deactivateOptimizations();
+            deactivateOptimizations()
           }
-        });
-      });
-    });
+        })
+      })
+    })
 
-    observer.observe(document.body, { childList: true });
+    observer.observe(document.body, { childList: true })
 
     return {
       activate: activateOptimizations,
       deactivate: deactivateOptimizations,
       cleanup: function () {
-        deactivateOptimizations();
-        observer.disconnect();
+        deactivateOptimizations()
+        observer.disconnect()
       }
-    };
+    }
   }
 }
 export default Emulator
