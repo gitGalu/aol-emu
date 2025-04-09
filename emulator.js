@@ -201,6 +201,9 @@ const Emulator = {
       "[STEREO]": {},
       ".CAS": {
         atari800_cassboot: "enabled"
+      },
+      ".BAS": {
+        atari800_internalbasic: "enabled"
       }
     }
     const kazRules = {
