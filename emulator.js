@@ -904,6 +904,9 @@ const Emulator = {
           let optionBtn = document.createElement('div')
           optionBtn.classList.add('emulator-desktop-menu-item')
           optionBtn.innerHTML = 'OPTION'
+          let resetBtn = document.createElement('div')
+          resetBtn.classList.add('emulator-desktop-menu-item')
+          resetBtn.innerHTML = 'RESET'
           let infoBtn = document.createElement('div')
           infoBtn.classList.add('emulator-desktop-menu-item')
           infoBtn.innerHTML = 'Info'
@@ -914,6 +917,7 @@ const Emulator = {
           menuEl.appendChild(startBtn)
           menuEl.appendChild(selectBtn)
           menuEl.appendChild(optionBtn)
+          menuEl.appendChild(resetBtn)
           menuEl.appendChild(flexSpacer)
           menuEl.appendChild(modeSelector)
           menuEl.appendChild(infoBtn)
@@ -949,6 +953,9 @@ const Emulator = {
           })
           optionBtn.addEventListener('click', () => {
             this.simulateKeypress('F2', 'F2', 113)
+          })
+          resetBtn.addEventListener('click', () => {
+            this.nostalgist.sendCommand('RESET')
           })
           infoBtn.addEventListener('click', () => {
             this.showInfoOverlay()
