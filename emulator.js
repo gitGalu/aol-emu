@@ -575,7 +575,7 @@ const Emulator = {
         <h4 style="margin: 10px 0; color: #007bff; font-size: 18px;">Emulator Atari 8-bit</h4>
         <div style="margin: 15px 0; line-height: 1.5;">
           <p style="margin: 8px 0;"><span style="color: #9e9e9e;">Rdzeń emulatora:</span> atari800-libretro</p>
-          <p style="margin: 8px 0;"><span style="color: #9e9e9e;">Frontend:</span> AtariOnline</p>
+          <p style="margin: 8px 0;"><span style="color: #9e9e9e;">Frontend:</span> AtariOnline.pl</p>
           <p style="margin: 8px 0;"><span style="color: #9e9e9e;">Silnik:</span> Nostalgist.js</p>
         </div>
         <h4 style="margin: 15px 0 10px; color: #007bff; font-size: 16px;">Licencja</h4>
